@@ -20,25 +20,22 @@ enrollments = [
     {"student_id": "22000001", "course_code": "INT2204"}
 ]
 
-def normalize(string):
-    return string.strip().lower()
-
 def student_exist(student_id):
     for student in students:
-        if normalize(student_id) == normalize(student["id"]):
+        if student_id.strip() == student["id"]:
             return True
     return False
 
 def course_exist(course_code):
     for course in courses:
-        if normalize(course_code) == normalize(course["code"]):
+        if course_code.strip().upper() == course["code"]:
             return True
     return False
 
 def course_available(course_code):
     if course_exist(course_code):
         for course in courses:
-            if normalize(course_code) == normalize(course["code"]):
+            if course_code.strip().upper() == course["code"]:
                 remaining = course["capacity"] - course["enrolled"]
                 if remaining <= 0:
                     return False
@@ -46,14 +43,14 @@ def course_available(course_code):
 
 def duplicate(student_id, course_code):
     for enrollment in enrollments:
-        if normalize(student_id) == normalize(enrollment["student_id"]) and normalize(course_code) == normalize(enrollment["course_code"]):
+        if student_id.strip() == enrollment["student_id"] and course_code.strip().upper() == enrollment["course_code"]:
             return True
     return False
 
 
 def enroll_student(student_id, course_code):
-    student_id = normalize(student_id)
-    course_code = normalize(course_code)
+    student_id = student_id.strip()
+    course_code = course_code.strip().upper()
     if not student_exist(student_id):
         return "Sinh vien khong ton tai"
     elif not course_exist(course_code):
@@ -68,8 +65,8 @@ def enroll_student(student_id, course_code):
     }
     enrollments.append(new_enrollment)
     for course in courses:
-        if course_code == normalize(course["code"]):
-            course["enrolled"] = course["enrolled"] + 1
+        if course_code == course["code"]:
+            course["enrolled"] += 1
     return "Ban da dang ky hoc phan thanh cong"
 
 print(enroll_student("22000002", "INT2204")) # Ket qua: Ban da dang ky hoc phan thanh cong
