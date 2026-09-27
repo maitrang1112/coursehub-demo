@@ -1,5 +1,3 @@
-print("CourseHub - Buoi 1")
-
 students = [
     {"id": "22000001", "name": "Nguyen Minh Anh", "major": "KHDL"},
     {"id": "22000002", "name": "Tran Duc Long", "major": "KHDL"},
@@ -22,49 +20,65 @@ enrollments = [
     {"student_id": "22000001", "course_code": "INT2204"}
 ]
 
-for course in courses:
-    remaining = course["capacity"] - course["enrolled"]
-    print(course["code"], "- con", remaining, "cho")
+def normalize(string):
+    return string.strip().lower()
 
-def find_course(course_code):
+def student_exist(student_id):
+    for student in students:
+        if normalize(student_id) == normalize(student["id"]):
+            return True
+    return False
+
+def course_exist(course_code):
     for course in courses:
-        if course["code"] == course_code:
-            return course # kthuc ham
-    return None
+        if normalize(course_code) == normalize(course["code"]):
+            return True
+    return False
 
-print(find_course("INT2204"))
+def course_available(course_code):
+    if course_exist(course_code):
+        for course in courses:
+            if normalize(course_code) == normalize(course["code"]):
+                remaining = course["capacity"] - course["enrolled"]
+                if remaining <= 0:
+                    return False
+    return True
 
-def can_enroll(student_id, course_code):
-    course = find_course(course_code)
-    if course is None:
-        return False, "Hoc phan khong ton tai"
-    if course["enrolled"] >= course["capacity"]:
-        return False, "Lop da du so luong"
-    duplicated = any(
-        item["student_id"] == student_id and item["course_code"] == course_code
-        for item in enrollments
-    )
-    if duplicated:
-        return False, "Sinh vien da dang ky hoc phan nay"
-    return True, "Co the dang ky"
+def duplicate(student_id, course_code):
+    for enrollment in enrollments:
+        if normalize(student_id) == normalize(enrollment["student_id"]) and normalize(course_code) == normalize(enrollment["course_code"]):
+            return True
+    return False
 
-print(can_enroll("22000002", "INT2204"))
 
-try:
-    limit = int(input("Nhap so luong hoc phan muon hien thi: "))
-    print(courses[:limit])
-except ValueError:
-    print("So luong phai la so nguyen")
+def enroll_student(student_id, course_code):
+    student_id = normalize(student_id)
+    course_code = normalize(course_code)
+    if not student_exist(student_id):
+        return "Sinh vien khong ton tai"
+    elif not course_exist(course_code):
+        return "Hoc phan khong ton tai"
+    elif duplicate(student_id, course_code):
+            return "Ban da dang ky hoc phan nay"
+    elif not course_available(course_code):
+        return "Hoc phan da du so luong cho phep sinh vien dang ky"
+    new_enrollment = {
+        "student_id" : student_id,
+        "course_code" : course_code.upper()
+    }
+    enrollments.append(new_enrollment)
+    for course in courses:
+        if course_code == normalize(course["code"]):
+            course["enrolled"] = course["enrolled"] + 1
+    return "Ban da dang ky hoc phan thanh cong"
 
-def search_courses(keyword):
-    normalized = keyword.strip().lower()
-    results = []
+print(enroll_student("22000002", "INT2204")) # Ket qua: Ban da dang ky hoc phan thanh cong
+print(enroll_student("22000001", "INT2204")) # Ket qua: Ban da dang ky hoc phan nay
+print(enroll_student("22000001", "INT2205")) # Ket qua: Hoc phan da du so luong cho phep sinh vien dang ky
+print(enroll_student("22000001", "INT2206")) # Ket qua: Hoc phan khong ton tai
+print(enroll_student("22000003", "INT2204")) # Ket qua: Sinh vien khong ton tai
+
     
-    for course in courses:
-        code = course["code"].lower()
-        name = course["name"].lower()
-        if normalized in code or normalized in name:
-            results.append(course)
 
-    return results
-print(search_courses("web"))
+
+        
