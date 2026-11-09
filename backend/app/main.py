@@ -5,11 +5,19 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from .database import engine
 from .schemas import EnrollmentCreate
+from fastapi.middleware.cors import CORSMiddleware
 logger = logging.getLogger(__name__)
 app = FastAPI(
     title="CourseHub API",
     version="0.4.0",
     description="API thuc hanh Buoi 4 - transaction, locking va hieu nang",
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type"],
 )
 @app.get("/")
 def read_root() -> dict[str, str]:
@@ -177,3 +185,131 @@ def delete_enrollment(student_id: str, class_section_id: str) -> Response:
             )
         connection.execute(text(event_sql), parameters)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@app.get("/courses")
+def list_courses(
+    q: str | None = Query(default=None, min_length=1),
+    ) -> list[dict[str, object]]:
+    sql = """
+        SELECT code, name, credits
+        FROM courses
+    """
+    parameters: dict[str, object] = {}
+    if q is not None:
+        keyword = q.strip().lower()
+        if not keyword:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Tu khoa tim kiem khong duoc rong",
+            )
+        sql += """
+            WHERE LOWER(code) LIKE :keyword
+            OR LOWER(name) LIKE :keyword
+        """
+        parameters["keyword"] = f"%{keyword}%"
+    sql += " ORDER BY code"
+    with engine.connect() as connection:
+        rows = connection.execute(text(sql), parameters).mappings().all()
+    return [dict(row) for row in rows]
+
+@app.get("/courses/{course_code}")
+def get_course(course_code: str) -> dict[str, object]:
+    sql = """
+        SELECT code, name, credits
+        FROM courses
+        WHERE code = :course_code
+    """
+    with engine.connect() as connection:
+        row = connection.execute(
+            text(sql),
+            {"course_code": course_code.upper()},
+        ).mappings().first()
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Khong tim thay hoc phan",
+        )
+    return dict(row)
+
+@app.get("/students/{student_id}/enrollments")
+def list_student_enrollments(student_id: str) -> list[dict[str, object]]:
+    student_sql = "SELECT id FROM students WHERE id = :student_id"
+    enrollment_sql = """
+        SELECT e.student_id,
+            s.name AS student_name,
+            cs.id AS class_section_id,
+            c.code AS course_code,
+            c.name AS course_name,
+            e.registered_at
+        FROM enrollments AS e
+        JOIN students AS s ON s.id = e.student_id
+        JOIN class_sections AS cs ON cs.id = e.class_section_id
+        JOIN courses AS c ON c.code = cs.course_code
+        WHERE e.student_id = :student_id
+        ORDER BY cs.id
+    """
+    with engine.connect() as connection:
+        student = connection.execute(
+            text(student_sql),
+            {"student_id": student_id},
+        ).first()
+        if student is None:
+            raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Khong tim thay sinh vien",
+            )
+        rows = connection.execute(
+            text(enrollment_sql),
+            {"student_id": student_id},
+        ).mappings().all()
+
+    return [dict(row) for row in rows]
+
+@app.get("/enrollment-events")
+def list_enrollment_events(
+    student_id: str = Query(...),
+    limit: int = Query(default=10, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, object]:
+    if len(student_id) != 8 or not student_id.isdigit():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Ma sinh vien phai gom 8 chu so",
+        )
+    student_sql = "SELECT id FROM students WHERE id = :student_id"
+    count_sql = """
+        SELECT COUNT(*)
+        FROM enrollment_events
+        WHERE dataset = 'demo' AND student_id = :student_id
+    """
+    events_sql = """
+        SELECT id, student_id, class_section_id, event_type, occurred_at
+        FROM enrollment_events
+        WHERE dataset = 'demo' AND student_id = :student_id
+        ORDER BY occurred_at DESC, id DESC
+        LIMIT :limit OFFSET :offset
+    """
+    with engine.connect() as connection:
+        student = connection.execute(
+            text(student_sql),
+            {"student_id": student_id},
+        ).first()
+        if student is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Khong tim thay sinh vien",
+            )
+        total = connection.execute(
+            text(count_sql),
+            {"student_id": student_id},
+        ).scalar_one()
+        rows = connection.execute(
+            text(events_sql),
+            {"student_id": student_id, "limit": limit, "offset": offset},
+        ).mappings().all()
+    return {
+        "items": [dict(row) for row in rows],
+        "total": int(total),
+        "limit": limit,
+        "offset": offset,
+    }
