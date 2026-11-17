@@ -403,7 +403,7 @@ def list_enrollment_events(
         "limit": limit,
         "offset": offset,
     }
-        return dict(row)
+    return dict(row)
 
 # Bài tập tự thực hành 3
 class CapacityUpdateSchema(BaseModel):
